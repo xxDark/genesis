@@ -10,6 +10,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Arrays;
 
 public final class Genesis {
 	private static final MethodHandles.Lookup LOOKUP;
@@ -21,11 +22,16 @@ public final class Genesis {
 	private Genesis() {
 	}
 
-	public static MethodHandle constructorAsInvoker(MethodHandle allocator) throws NoSuchMethodException {
+	public static MethodHandle constructorAsInvoker(MethodHandle allocator) {
 		MethodHandleInfo info = LOOKUP.revealDirect(allocator);
 		MethodType mt = info.getMethodType();
 		Class<?>[] parameterTypes = mt.parameterArray();
-		Constructor<?> ctor = PRIVILEGED_REFLECTION.getGetDeclaredConstructor(info.getDeclaringClass(), parameterTypes);
+		Constructor<?> ctor;
+		try {
+			ctor = PRIVILEGED_REFLECTION.getGetDeclaredConstructor(info.getDeclaringClass(), parameterTypes);
+		} catch (NoSuchMethodException ex) {
+			throw new IllegalStateException("Cannot find constructor of %s with arguments %s".formatted(info.getDeclaringClass(), Arrays.toString(parameterTypes)), ex);
+		}
 		Method m = ctorToMethod(ctor);
 		class InvokeHolder {
 			static final MethodHandle INVOKE;
@@ -70,7 +76,7 @@ public final class Genesis {
 					void.class,
 					new Class[0],
 					// This relies on the fact that (as of now...)
-					// JVM will make a call into the VM if method is native, and it will be dispatched
+					// Java will make a call into the VM if method is native, and it will be dispatched
 					// via JVM_InvokeMethod. That is what we want.
 					Modifier.PUBLIC | Modifier.NATIVE,
 					slot,
